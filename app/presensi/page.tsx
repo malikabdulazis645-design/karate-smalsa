@@ -1,218 +1,457 @@
-import Navbar from "@/components/Navbar";
+"use client";
 
-export const metadata = {
-  title: "Presensi | Karate Smalsa",
-  description: "Sistem presensi anggota Karate Smalsa.",
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+
+type TrainingSession = {
+  id: string;
+  tanggal: string;
+  waktu_mulai: string;
+  judul: string;
+  materi: string | null;
+  status: "Terjadwal" | "Selesai" | "Dibatalkan";
 };
 
-const members = [
-  { id: 1, name: "Nama Anggota 01", class: "X IPA 1" },
-  { id: 2, name: "Nama Anggota 02", class: "X IPA 2" },
-  { id: 3, name: "Nama Anggota 03", class: "XI IPA 1" },
-  { id: 4, name: "Nama Anggota 04", class: "XI IPS 1" },
-  { id: 5, name: "Nama Anggota 05", class: "XII IPA 1" },
-  { id: 6, name: "Nama Anggota 06", class: "XII IPS 1" },
-];
+type AttendanceRecord = {
+  training_session_id: string;
+  status: "Hadir" | "Izin" | "Sakit";
+};
 
 export default function PresensiPage() {
-  return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
-      <Navbar />
+  const supabase = createClient();
 
-      {/* HERO */}
-      <section className="bg-black px-6 pb-20 pt-36 text-white">
-        <div className="mx-auto max-w-7xl">
-          <p className="mb-3 text-sm font-bold uppercase tracking-[0.25em] text-red-500">
+  const [sessions, setSessions] = useState<TrainingSession[]>([]);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  async function loadData() {
+    setLoading(true);
+    setError("");
+
+    const { data: sessionData, error: sessionError } =
+      await supabase
+        .from("training_sessions")
+        .select(
+          "id, tanggal, waktu_mulai, judul, materi, status"
+        )
+        .order("tanggal", { ascending: false })
+        .order("waktu_mulai", { ascending: false });
+
+    if (sessionError) {
+      console.error(sessionError);
+      setError("Jadwal latihan gagal dimuat.");
+      setLoading(false);
+      return;
+    }
+
+    const { data: attendanceData, error: attendanceError } =
+      await supabase
+        .from("attendance_records")
+        .select("training_session_id, status");
+
+    if (attendanceError) {
+      console.error(attendanceError);
+      setError("Data presensi gagal dimuat.");
+      setLoading(false);
+      return;
+    }
+
+    setSessions(sessionData || []);
+    setAttendance(attendanceData || []);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  function formatTanggal(tanggal: string) {
+    return new Date(`${tanggal}T00:00:00`).toLocaleDateString(
+      "id-ID",
+      {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }
+    );
+  }
+
+  function formatWaktu(waktu: string) {
+    return waktu.slice(0, 5);
+  }
+
+  function getHadirCount(sessionId: string) {
+    return attendance.filter(
+      (item) =>
+        item.training_session_id === sessionId &&
+        item.status === "Hadir"
+    ).length;
+  }
+
+  function getStatusClass(
+    status: TrainingSession["status"]
+  ) {
+    if (status === "Terjadwal") {
+      return "bg-green-500/10 text-green-400";
+    }
+
+    if (status === "Selesai") {
+      return "bg-zinc-800 text-zinc-300";
+    }
+
+    return "bg-red-500/10 text-red-400";
+  }
+
+  /*
+   * Jadwal terbaru:
+   * - bukan jadwal yang dibatalkan
+   * - berdasarkan tanggal + waktu latihan
+   */
+  const activeSessions = sessions
+    .filter((session) => session.status !== "Dibatalkan")
+    .sort((a, b) => {
+      const dateA = new Date(
+        `${a.tanggal}T${a.waktu_mulai}`
+      ).getTime();
+
+      const dateB = new Date(
+        `${b.tanggal}T${b.waktu_mulai}`
+      ).getTime();
+
+      return dateB - dateA;
+    });
+
+  const cancelledSessions = sessions
+    .filter((session) => session.status === "Dibatalkan")
+    .sort((a, b) => {
+      const dateA = new Date(
+        `${a.tanggal}T${a.waktu_mulai}`
+      ).getTime();
+
+      const dateB = new Date(
+        `${b.tanggal}T${b.waktu_mulai}`
+      ).getTime();
+
+      return dateB - dateA;
+    });
+
+  const sortedSessions = [
+    ...activeSessions,
+    ...cancelledSessions,
+  ];
+
+  /*
+   * Kartu pertama dari jadwal aktif adalah
+   * jadwal terbaru dan akan di-highlight.
+   */
+  const highlightedSessionId =
+    activeSessions.length > 0
+      ? activeSessions[0].id
+      : null;
+
+  return (
+    <main className="min-h-screen bg-zinc-950 text-white">
+
+      {/* =========================
+          HEADER
+      ========================== */}
+      <section className="border-b border-white/10 bg-black">
+        <div className="mx-auto max-w-7xl px-6 pb-10 pt-32">
+
+          <p className="text-sm font-bold uppercase tracking-[0.25em] text-red-500">
             Internal Karate Smalsa
           </p>
 
-          <h1 className="text-4xl font-black sm:text-6xl">
-            Presensi <span className="text-red-600">Anggota</span>
+          <h1 className="mt-3 text-4xl font-black sm:text-5xl">
+            Presensi Anggota
           </h1>
 
-          <p className="mt-5 max-w-2xl leading-7 text-zinc-400">
-            Kelola kehadiran anggota Karate Smalsa dalam setiap kegiatan
-            latihan dan agenda organisasi.
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-base">
+            Pilih jadwal latihan untuk melakukan presensi
+            kehadiran anggota Karate Smalsa.
+          </p>
+
+        </div>
+      </section>
+
+      {/* =========================
+          CONTENT
+      ========================== */}
+      <div className="mx-auto max-w-7xl px-6 py-10">
+
+        <div className="mb-8">
+          <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
+            Jadwal Latihan
+          </p>
+
+          <h2 className="mt-2 text-2xl font-black">
+            Pilih Latihan
+          </h2>
+
+          <p className="mt-2 text-sm text-zinc-500">
+            Jadwal latihan mengikuti data yang dibuat
+            melalui dashboard admin.
           </p>
         </div>
-      </section>
 
-      {/* PRESENSI */}
-      <section className="px-6 py-16">
-        <div className="mx-auto max-w-7xl">
-
-          {/* HEADER PRESENSI */}
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm sm:p-8">
-            <div className="grid gap-6 md:grid-cols-2">
-
-              <div>
-                <label className="mb-2 block text-sm font-bold text-zinc-700">
-                  Tanggal Latihan
-                </label>
-
-                <input
-                  type="date"
-                  defaultValue="2026-10-06"
-                  className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-bold text-zinc-700">
-                  Kegiatan
-                </label>
-
-                <select className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20">
-                  <option>Latihan Rutin</option>
-                  <option>Latihan Bersama</option>
-                  <option>Persiapan Kejuaraan</option>
-                  <option>Kegiatan Lainnya</option>
-                </select>
-              </div>
-
-            </div>
+        {/* ERROR */}
+        {error && (
+          <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/5 p-5 text-sm text-red-400">
+            {error}
           </div>
+        )}
 
-          {/* STATISTIK */}
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* LOADING */}
+        {loading ? (
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-12 text-center">
+            <p className="text-sm text-zinc-400">
+              Memuat jadwal latihan...
+            </p>
+          </div>
+        ) : sortedSessions.length === 0 ? (
+          /* EMPTY */
+          <div className="rounded-3xl border border-dashed border-zinc-700 bg-zinc-900 p-12 text-center">
 
-            <div className="rounded-2xl bg-black p-6 text-white">
-              <div className="text-sm text-zinc-500">Total Anggota</div>
-              <div className="mt-2 text-3xl font-black">
-                {members.length}
-              </div>
+            <div className="text-6xl">
+              🥋
             </div>
 
-            <div className="rounded-2xl border border-green-200 bg-green-50 p-6">
-              <div className="text-sm text-green-700">Hadir</div>
-              <div className="mt-2 text-3xl font-black text-green-700">
-                0
-              </div>
-            </div>
+            <h2 className="mt-5 text-2xl font-black">
+              Belum ada jadwal latihan
+            </h2>
 
-            <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-6">
-              <div className="text-sm text-yellow-700">Izin / Sakit</div>
-              <div className="mt-2 text-3xl font-black text-yellow-700">
-                0
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
-              <div className="text-sm text-red-700">Alpa</div>
-              <div className="mt-2 text-3xl font-black text-red-700">
-                0
-              </div>
-            </div>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-zinc-500">
+              Jadwal latihan akan muncul di halaman ini
+              setelah admin menambahkannya melalui dashboard.
+            </p>
 
           </div>
+        ) : (
+          /* =========================
+             TRAINING CARDS
+          ========================== */
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
 
-          {/* DAFTAR ANGGOTA */}
-          <div className="mt-8 overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
+            {sortedSessions.map((session) => {
+              const hadir = getHadirCount(session.id);
 
-            <div className="border-b border-zinc-200 p-6">
-              <h2 className="text-2xl font-black">
-                Daftar Kehadiran
-              </h2>
+              const isHighlighted =
+                session.id === highlightedSessionId;
 
-              <p className="mt-1 text-sm text-zinc-500">
-                Tentukan status kehadiran setiap anggota.
-              </p>
-            </div>
-
-            <div className="divide-y divide-zinc-100">
-
-              {members.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex flex-col gap-5 p-6 lg:flex-row lg:items-center lg:justify-between"
+              return (
+                <Link
+                  key={session.id}
+                  href={`/presensi/${session.id}`}
+                  className={`group relative rounded-3xl p-6 transition duration-300 hover:-translate-y-1 ${
+                    isHighlighted
+                      ? "border-2 border-red-500 bg-gradient-to-br from-red-950/60 via-zinc-900 to-zinc-900 shadow-[0_0_35px_rgba(220,38,38,0.15)]"
+                      : "border border-zinc-800 bg-zinc-900 hover:border-red-600 hover:bg-zinc-900/80"
+                  }`}
                 >
 
-                  {/* IDENTITAS */}
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black font-black text-white">
-                      {member.id}
+                  {/* =========================
+                      HIGHLIGHT LABEL
+                  ========================== */}
+                  {isHighlighted && (
+                    <div className="absolute -top-3 left-5">
+
+                      <span className="inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-1.5 text-xs font-black uppercase tracking-wider text-white shadow-lg">
+                        <span>★</span>
+                        Jadwal Terbaru
+                      </span>
+
                     </div>
+                  )}
 
-                    <div>
-                      <h3 className="font-bold text-zinc-900">
-                        {member.name}
-                      </h3>
+                  {/* =========================
+                      TOP
+                  ========================== */}
+                  <div
+                    className={`flex items-center justify-between gap-3 ${
+                      isHighlighted ? "mt-2" : ""
+                    }`}
+                  >
 
-                      <p className="text-sm text-zinc-500">
-                        {member.class}
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-bold ${getStatusClass(
+                        session.status
+                      )}`}
+                    >
+                      {session.status}
+                    </span>
+
+                    <span
+                      className={`text-lg transition ${
+                        isHighlighted
+                          ? "text-red-500 group-hover:text-red-400"
+                          : "text-zinc-600 group-hover:text-red-500"
+                      }`}
+                    >
+                      →
+                    </span>
+
+                  </div>
+
+                  {/* =========================
+                      DATE
+                  ========================== */}
+                  <div className="mt-6">
+
+                    <p
+                      className={`text-sm font-bold ${
+                        isHighlighted
+                          ? "text-red-400"
+                          : "text-red-500"
+                      }`}
+                    >
+                      {formatTanggal(session.tanggal)}
+                    </p>
+
+                    <h3 className="mt-2 text-2xl font-black text-white">
+                      {session.judul}
+                    </h3>
+
+                    <p className="mt-2 text-sm font-medium text-zinc-400">
+                      Mulai pukul{" "}
+                      <span className="font-bold text-zinc-300">
+                        {formatWaktu(session.waktu_mulai)} WIB
+                      </span>
+                    </p>
+
+                  </div>
+
+                  {/* =========================
+                      MATERI
+                  ========================== */}
+                  {session.materi && (
+                    <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+
+                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-600">
+                        Materi
                       </p>
+
+                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-zinc-400">
+                        {session.materi}
+                      </p>
+
                     </div>
+                  )}
+
+                  {/* =========================
+                      FOOTER CARD
+                  ========================== */}
+                  <div className="mt-6 border-t border-zinc-800 pt-5">
+
+                    <div className="flex items-end justify-between">
+
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                          Sudah Hadir
+                        </p>
+
+                        <p
+                          className={`mt-1 text-3xl font-black ${
+                            isHighlighted
+                              ? "text-red-400"
+                              : "text-white"
+                          }`}
+                        >
+                          {hadir}
+                        </p>
+
+                        <p className="text-xs text-zinc-500">
+                          anggota
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+
+                        <p className="text-xs text-zinc-600">
+                          Presensi
+                        </p>
+
+                        <p
+                          className={`mt-1 text-sm font-bold ${
+                            isHighlighted
+                              ? "text-red-500"
+                              : "text-zinc-400 group-hover:text-red-500"
+                          }`}
+                        >
+                          Buka →
+                        </p>
+
+                      </div>
+
+                    </div>
+
                   </div>
 
-                  {/* STATUS */}
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:w-auto">
+                </Link>
+              );
+            })}
 
-                    <button
-                      type="button"
-                      className="rounded-xl border border-green-200 px-5 py-3 text-sm font-bold text-green-700 transition hover:bg-green-50"
-                    >
-                      Hadir
-                    </button>
+          </div>
+        )}
 
-                    <button
-                      type="button"
-                      className="rounded-xl border border-yellow-200 px-5 py-3 text-sm font-bold text-yellow-700 transition hover:bg-yellow-50"
-                    >
-                      Izin
-                    </button>
+        {/* =========================
+            INFO
+        ========================== */}
+        {!loading && activeSessions.length > 0 && (
+          <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5">
 
-                    <button
-                      type="button"
-                      className="rounded-xl border border-orange-200 px-5 py-3 text-sm font-bold text-orange-700 transition hover:bg-orange-50"
-                    >
-                      Sakit
-                    </button>
+            <div className="flex items-start gap-3">
 
-                    <button
-                      type="button"
-                      className="rounded-xl border border-red-200 px-5 py-3 text-sm font-bold text-red-700 transition hover:bg-red-50"
-                    >
-                      Alpa
-                    </button>
+              <div className="text-lg">
+                ★
+              </div>
 
-                  </div>
+              <div>
+                <p className="text-sm font-bold text-zinc-300">
+                  Jadwal terbaru ditandai
+                </p>
 
-                </div>
-              ))}
+                <p className="mt-1 text-xs leading-6 text-zinc-500">
+                  Kartu dengan tanda{" "}
+                  <span className="font-bold text-red-500">
+                    Jadwal Terbaru
+                  </span>{" "}
+                  merupakan jadwal latihan terbaru yang tersedia.
+                </p>
+              </div>
 
-            </div>
-
-            {/* SIMPAN */}
-            <div className="border-t border-zinc-200 bg-zinc-50 p-6">
-              <button
-                type="button"
-                className="w-full rounded-xl bg-red-600 px-6 py-4 font-black text-white transition hover:bg-red-700 sm:w-auto"
-              >
-                Simpan Presensi
-              </button>
             </div>
 
           </div>
+        )}
 
-        </div>
-      </section>
+      </div>
 
-      {/* FOOTER */}
-      <footer className="bg-black px-6 py-10 text-zinc-500">
-        <div className="mx-auto max-w-7xl">
-          <div className="font-black text-white">
+      {/* =========================
+          FOOTER
+      ========================== */}
+      <footer className="border-t border-zinc-800 bg-black">
+
+        <div className="mx-auto max-w-7xl px-6 py-10 text-center">
+
+          <p className="text-lg font-black tracking-wider text-white">
             KARATE SMALSA
-          </div>
+          </p>
 
-          <div className="mt-1 text-sm">
+          <p className="mt-1 text-sm text-zinc-500">
             Karate SMA Al Islam 1 Surakarta
-          </div>
+          </p>
 
-          <div className="mt-5 text-sm">
+          <p className="mt-6 text-xs text-zinc-600">
             © 2026 Karate Smalsa. All rights reserved.
-          </div>
+          </p>
+
         </div>
+
       </footer>
+
     </main>
   );
 }

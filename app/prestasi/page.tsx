@@ -19,6 +19,7 @@ type Championship = {
 
 type Achievement = {
   id: string;
+  championship_id: string;
   medali: string | null;
   member_id: string;
 };
@@ -26,7 +27,10 @@ type Achievement = {
 export default async function PrestasiPage() {
   const supabase = await createClient();
 
-  // Ambil semua kejuaraan dari database
+  // =====================================================
+  // AMBIL SEMUA KEJUARAAN
+  // =====================================================
+
   const { data: kejuaraan, error: championshipError } =
     await supabase
       .from("championships")
@@ -35,24 +39,37 @@ export default async function PrestasiPage() {
       )
       .order("tanggal", { ascending: false });
 
-  // Ambil semua data peraih prestasi
+  // =====================================================
+  // AMBIL SEMUA DATA PERAIH PRESTASI
+  // =====================================================
+
   const { data: achievements, error: achievementError } =
     await supabase
       .from("achievement_records")
-      .select("id, medali, member_id");
+      .select(
+        "id, championship_id, medali, member_id"
+      );
 
   const championships: Championship[] = kejuaraan || [];
   const prestasi: Achievement[] = achievements || [];
 
-  // Tahun kejuaraan terbaru
+  // =====================================================
+  // TAHUN KEJUARAAN TERBARU
+  // =====================================================
+
   const tahunTerbaru =
     championships.length > 0
       ? new Date(championships[0].tanggal).getFullYear()
       : "-";
 
-  // Jumlah anggota unik yang pernah meraih prestasi
+  // =====================================================
+  // JUMLAH ANGGOTA UNIK YANG PERNAH MERAIH MEDALI
+  // =====================================================
+
   const anggotaPeraih = new Set(
-    prestasi.map((item) => item.member_id)
+    prestasi
+      .map((item) => item.member_id)
+      .filter(Boolean)
   ).size;
 
   return (
@@ -166,21 +183,30 @@ export default async function PrestasiPage() {
                   item.tanggal
                 ).getFullYear();
 
-                const jumlahPeraih = prestasi.filter(
-                  (achievement) =>
-                    achievement.member_id &&
-                    // achievement_records yang terkait
-                    // dengan kejuaraan ini akan dihitung
-                    // melalui query tambahan di bawah
-                    false
-                ).length;
+                // =====================================================
+                // HITUNG ANGGOTA UNIK PADA KEJUARAAN INI
+                // =====================================================
+
+                const jumlahPeraih = new Set(
+                  prestasi
+                    .filter(
+                      (achievement) =>
+                        achievement.championship_id ===
+                        item.id
+                    )
+                    .map(
+                      (achievement) =>
+                        achievement.member_id
+                    )
+                    .filter(Boolean)
+                ).size;
 
                 return (
                   <ChampionshipCard
                     key={item.id}
                     championship={item}
                     tahun={tahun}
-                    fallbackCount={jumlahPeraih}
+                    jumlahPeraih={jumlahPeraih}
                   />
                 );
               })}
@@ -225,10 +251,11 @@ export default async function PrestasiPage() {
 function ChampionshipCard({
   championship,
   tahun,
+  jumlahPeraih,
 }: {
   championship: Championship;
   tahun: number;
-  fallbackCount: number;
+  jumlahPeraih: number;
 }) {
   return (
     <Link
@@ -281,6 +308,20 @@ function ChampionshipCard({
               📍 {championship.tempat}
             </span>
           )}
+        </div>
+
+        {/* JUMLAH PERAIH MEDALI */}
+        <div className="mt-4 rounded-xl bg-red-50 px-4 py-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-red-400">
+            Peraih Medali
+          </p>
+
+          <p className="mt-1 text-sm font-black text-red-600">
+            {jumlahPeraih}{" "}
+            {jumlahPeraih === 1
+              ? "anggota"
+              : "anggota"}
+          </p>
         </div>
 
         {/* Deskripsi */}

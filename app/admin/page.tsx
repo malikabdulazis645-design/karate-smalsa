@@ -27,6 +27,11 @@ const menus = [
     href: "/admin/prestasi",
   },
   {
+    title: "Presensi",
+    description: "Kelola jadwal latihan dan kehadiran anggota.",
+    href: "/admin/presensi",
+  },
+  {
     title: "Galeri",
     description: "Kelola album dan foto kegiatan.",
     href: "/admin/galeri",

@@ -4,10 +4,11 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+const ADMIN_EMAIL = "malikabdulazis645@gmail.com";
+
 export default function AdminLoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -20,13 +21,14 @@ export default function AdminLoginPage() {
 
     const supabase = createClient();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data, error: loginError } =
+      await supabase.auth.signInWithPassword({
+        email: ADMIN_EMAIL,
+        password,
+      });
 
-    if (error) {
-      setError("Email atau password salah.");
+    if (loginError) {
+      setError("Password salah.");
       setLoading(false);
       return;
     }
@@ -68,7 +70,7 @@ export default function AdminLoginPage() {
           </h1>
 
           <p className="mt-2 text-sm text-zinc-500">
-            Masuk untuk mengelola website Karate Smalsa.
+            Masukkan password untuk mengakses dashboard admin.
           </p>
         </div>
 
@@ -78,30 +80,10 @@ export default function AdminLoginPage() {
         >
           <div>
             <label
-              htmlFor="email"
-              className="text-sm font-semibold text-zinc-300"
-            >
-              Email
-            </label>
-
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="admin@email.com"
-              required
-              autoComplete="email"
-              className="mt-2 w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white outline-none transition placeholder:text-zinc-700 focus:border-red-600"
-            />
-          </div>
-
-          <div className="mt-5">
-            <label
               htmlFor="password"
               className="text-sm font-semibold text-zinc-300"
             >
-              Password
+              Password Admin
             </label>
 
             <input
